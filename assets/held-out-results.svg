@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="title desc">
+  <title id="title">Held-out Santa Rosa wildfire: severe-damage recall in the first 20 percent reviewed</title>
+  <desc id="desc">Simple before-and-after image change found 79.8 percent of severe buildings. The trained random forest found 32.1 percent. A random ordering would find approximately 20 percent.</desc>
+  <rect width="900" height="360" rx="20" fill="#0b1220"/>
+  <text x="42" y="51" fill="#f8fafc" font-family="Arial, sans-serif" font-size="26" font-weight="700">Can we prioritize buildings after a disaster?</text>
+  <text x="42" y="83" fill="#94a3b8" font-family="Arial, sans-serif" font-size="16">Held-out Santa Rosa wildfire · 2,104 buildings · first 20% sent for human review</text>
+  <text x="42" y="135" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="17">Before/after image change</text>
+  <rect x="320" y="112" width="447" height="35" rx="8" fill="#14b8a6"/>
+  <text x="785" y="137" fill="#f8fafc" font-family="Arial, sans-serif" font-size="22" font-weight="700">79.8%</text>
+  <text x="42" y="203" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="17">Trained random forest</text>
+  <rect x="320" y="180" width="180" height="35" rx="8" fill="#f59e0b"/>
+  <text x="518" y="205" fill="#f8fafc" font-family="Arial, sans-serif" font-size="22" font-weight="700">32.1%</text>
+  <text x="42" y="271" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="17">Random ordering (reference)</text>
+  <rect x="320" y="248" width="112" height="35" rx="8" fill="#475569"/>
+  <text x="450" y="273" fill="#f8fafc" font-family="Arial, sans-serif" font-size="22" font-weight="700">20%</text>
+  <text x="42" y="326" fill="#94a3b8" font-family="Arial, sans-serif" font-size="14">288 / 361 severe buildings found by simple change ranking. Research benchmark, not field accuracy.</text>
+</svg>

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "disaster-damage-triage"
+version = "0.1.0"
+description = "Evaluate building-damage triage on unseen disasters using xBD satellite imagery"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=2.0",
+  "pandas>=2.2",
+  "Pillow>=11.0",
+  "scikit-learn>=1.6",
+  "scipy>=1.14",
+]
+
+[project.optional-dependencies]
+demo = ["streamlit>=1.40"]
+mirror = ["pyarrow>=18.0"]
+vision = ["torch>=2.8", "torchvision>=0.23"]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+triage-prepare = "disaster_triage.prepare:main"
+triage-train = "disaster_triage.train:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
