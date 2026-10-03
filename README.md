@@ -6,6 +6,17 @@
 
 On a held-out Santa Rosa wildfire sample, reviewing the top 20% of buildings ranked by simple before/after pixel change surfaced **288 of 361 severely damaged buildings (79.8%)**. A trained random forest surfaced **116 of 361 (32.1%)**. The simpler ranking is the recommended demonstration; the model's failure to transfer is part of the finding.
 
+## Try the interface
+
+The interactive app opens in **published-results mode** without downloading the large xBD archive. It shows the outcome, model comparison, and a plain-language explanation. If you also have local xBD predictions, it unlocks a building-level explorer with a review-budget slider, ranking comparison, error filters, ID search, before/after imagery, scene overlays, and a CSV export. The imagery stays on your computer.
+
+```powershell
+pip install -e ".[demo]"
+streamlit run demo.py
+```
+
+For the full explorer, run the data preparation and training steps below, then launch the app from the same repository. If your results live elsewhere, set `TRIAGE_RESULTS_DIR` to that folder before starting Streamlit.
+
 ## Research question
 
 Can a small image model rank buildings for human review after a disaster, and how well does it hold up on an **entire disaster event that it never saw during training**?

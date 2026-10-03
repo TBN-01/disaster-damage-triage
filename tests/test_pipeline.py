@@ -2,11 +2,13 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from PIL import Image, ImageDraw
 
 from disaster_triage.inspect_data import inspect
 from disaster_triage.prepare import polygon_box, prepare
 from disaster_triage.train import evaluate, train
+from disaster_triage.ui_data import case_filter, ranked_queue
 
 
 def make_tile(root: Path, event: str, number: int) -> None:
@@ -56,4 +58,31 @@ def test_review_metric() -> None:
     result = evaluate(y, scores)
     # Top 20% means reviewing one of five buildings, capturing one of two damaged ones.
     assert result["recall_at_20_percent_reviewed"] == 0.5
+
+
+def test_queue_budget_and_error_filters() -> None:
+    frame = pd.DataFrame({
+        "sample_id": ["a", "b", "c", "d", "e"],
+        "baseline_score": [0.1, 0.9, 0.8, 0.2, 0.3],
+        "severe": [1, 1, 0, 1, 0],
+    })
+    ranked, summary = ranked_queue(frame, "baseline_score", 0.2)
+    assert summary == {
+        "review_count": 1, "total_count": 5, "severe_found": 1,
+        "severe_total": 3, "recall": 1 / 3, "precision": 1.0,
+    }
+    assert ranked.iloc[0]["sample_id"] == "b"
+    assert case_filter(ranked, "Severe cases missed")["sample_id"].tolist() == ["d", "a"]
+    assert case_filter(ranked, "False alarms").empty
+
+
+def test_queue_rejects_invalid_budget() -> None:
+    frame = pd.DataFrame({"severe": [1], "score": [0.5]})
+    for budget in (0, -0.1, 1.1):
+        try:
+            ranked_queue(frame, "score", budget)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Expected invalid budget {budget} to fail")
 

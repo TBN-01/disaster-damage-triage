@@ -1,0 +1,42 @@
+/* Presentation-only styling; all project claims remain in the Python app. */
+.block-container { max-width: 1220px; padding-top: 2rem; padding-bottom: 3rem; }
+div[data-testid="stAppViewContainer"] { background: #f5f7fb; }
+div[data-testid="stSidebar"] { background: #ecf2f7; }
+.hero {
+  background: linear-gradient(125deg, #10243b 0%, #0d3d55 62%, #0d6475 100%);
+  color: #fff; border-radius: 24px; padding: 2.4rem 2.7rem; margin-bottom: 1.6rem;
+  box-shadow: 0 16px 32px rgba(16, 36, 59, .12);
+}
+.eyebrow { color: #91e7e1; text-transform: uppercase; letter-spacing: .13em; font-size: .75rem; font-weight: 750; }
+.hero h1 { color: #fff; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1.1; margin: .7rem 0 1rem; }
+.hero p { color: #e5f0f5; font-size: 1.05rem; max-width: 48rem; margin: 0; line-height: 1.55; }
+.note-card { background: #fff; border: 1px solid #dfe7ef; border-radius: 16px; padding: 1.25rem 1.4rem; height: 100%; }
+.note-card h3 { font-size: 1.04rem; margin: 0 0 .5rem; color: #10243b; }
+.note-card p { margin: 0; color: #46566b; line-height: 1.5; font-size: .94rem; }
+.metric-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: .85rem; margin: 1.1rem 0 1.7rem; }
+.metric-tile { background: #fff; border: 1px solid #dfe7ef; border-radius: 15px; padding: 1.1rem 1.25rem; }
+.metric-tile .value { display: block; color: #10243b; font-size: 2rem; font-weight: 750; letter-spacing: -.04em; line-height: 1.1; }
+.metric-tile .label { display: block; color: #526278; font-size: .89rem; margin-top: .25rem; }
+.result-panel { background: #fff; border: 1px solid #dfe7ef; border-radius: 18px; padding: 1.4rem 1.6rem; margin: .8rem 0 1.2rem; }
+.result-row { display: grid; grid-template-columns: 170px 1fr 70px; gap: 1rem; align-items: center; margin: 1rem 0; }
+.result-row .name { color: #2a3950; font-size: .92rem; font-weight: 650; }
+.bar-track { height: 22px; border-radius: 6px; background: #eaf0f5; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 6px; }
+.bar-fill.teal { background: #0a9a96; }
+.bar-fill.amber { background: #e6a23c; }
+.bar-fill.gray { background: #a6b2c0; }
+.result-row .number { text-align: right; color: #10243b; font-weight: 750; }
+.section-intro { color: #58677b; max-width: 50rem; margin-top: -.3rem; }
+.small-print { color: #617086; font-size: .83rem; line-height: 1.5; }
+.status-pill { display: inline-block; background: #dff6f1; color: #0b665e; border-radius: 999px; padding: .25rem .7rem; font-size: .78rem; font-weight: 700; }
+.status-pill.warn { background: #fff0d9; color: #845000; }
+div[data-testid="stMetric"] { background: #fff; border: 1px solid #dfe7ef; border-radius: 14px; padding: .9rem 1.1rem; }
+div[data-testid="stMetricLabel"] { color: #526278; }
+div[data-testid="stTabs"] button { font-weight: 650; }
+@media (max-width: 700px) {
+  .block-container { padding: 1rem .8rem 2rem; }
+  .hero { padding: 1.7rem 1.3rem; border-radius: 18px; }
+  .metric-strip { grid-template-columns: 1fr; }
+  .result-row { grid-template-columns: 105px 1fr 54px; gap: .45rem; }
+  .result-panel { padding: 1rem; }
+}
