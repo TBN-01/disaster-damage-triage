@@ -68,7 +68,7 @@ The 30-tile-per-event sample contains **24,465 graded buildings from ten disaste
 | Mean absolute before/after pixel change | 288 / 361 | **79.8%** | **0.746** |
 | Random forest on image summary/change features | 116 / 361 | 32.1% | 0.302 |
 
-The large gap is evidence that this trained model does **not** generalize well to the unseen wildfire. It is not evidence that pixel change will work equally well on every disaster or in the field. The image pairs are already georegistered by the dataset, and changes can reflect shadows, seasonal differences, smoke, or viewpoint—not just damage. The simple score is a *priority for human review*, never a damage verdict. Thresholded precision/recall are in the saved metrics file from a local run; ranking metrics are primary because the task is triage.
+The large gap is evidence that this trained model does **not** generalize well to the unseen wildfire. It is not evidence that pixel change will work equally well on every disaster or in the field. The image pairs are already georegistered by the dataset, and changes can reflect shadows, seasonal differences, smoke, or viewpoint—not just damage. The simple score is a *priority for human review*, never a damage verdict. [Complete aggregate metrics](assets/held-out-metrics.json), including thresholded precision and recall, are committed for inspection; ranking metrics are primary because the task is triage.
 
 ## Earlier mask-derived pilot
 

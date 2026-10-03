@@ -1,0 +1,37 @@
+{
+  "test_event": "santa-rosa-wildfire",
+  "train_events": [
+    "guatemala-volcano",
+    "hurricane-florence",
+    "hurricane-harvey",
+    "hurricane-matthew",
+    "hurricane-michael",
+    "mexico-earthquake",
+    "midwest-flooding",
+    "palu-tsunami",
+    "socal-fire"
+  ],
+  "train_samples": 22361,
+  "train_severe": 3933,
+  "data_source": ["official-xbd-polygons"],
+  "baseline": {
+    "samples": 2104,
+    "severe_buildings": 361,
+    "precision": 0.7153846153846154,
+    "recall": 0.7728531855955678,
+    "average_precision": 0.7456289527935175,
+    "recall_at_20_percent_reviewed": 0.7977839335180056,
+    "confusion_matrix": [[1632, 111], [82, 279]]
+  },
+  "model": {
+    "samples": 2104,
+    "severe_buildings": 361,
+    "precision": 0.33980582524271846,
+    "recall": 0.09695290858725762,
+    "average_precision": 0.30232375197075534,
+    "recall_at_20_percent_reviewed": 0.32132963988919666,
+    "confusion_matrix": [[1675, 68], [326, 35]]
+  },
+  "baseline_definition": "Mean absolute pixel difference; threshold is training-set median.",
+  "model_definition": "Random forest on summary and coarse spatial image-change features."
+}
