@@ -91,3 +91,5 @@ This is a research demonstration, not an operational damage-assessment service. 
 
 Dataset: xBD / xView2, Defense Innovation Unit and Carnegie Mellon Software Engineering Institute. See the [xBD project description](https://www.sei.cmu.edu/projects/xview-2-challenge/) and [official dataset terms](https://xview2.org/terms).
 
+The code in this repository is under the [MIT license](LICENSE). That does not change the separate **CC BY-NC-SA 4.0** terms for xBD imagery and annotations; no xBD imagery or labels are redistributed here.
+
