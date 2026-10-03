@@ -14,7 +14,9 @@ def make_sample_demo(directory: Path) -> pd.DataFrame:
     table = directory / "synthetic_predictions.csv"
     if table.exists():
         frame = pd.read_csv(table)
-        if len(frame) == 24 and all(Path(path).exists() for path in frame["pre_crop"]):
+        if len(frame) == 24 and all(
+            Path(path).exists() for column in ("pre_crop", "post_crop") for path in frame[column]
+        ):
             return frame
 
     rng = np.random.default_rng(42)
