@@ -15,6 +15,13 @@ from sklearn.metrics import average_precision_score, confusion_matrix, precision
 from .features import image_features
 
 
+def make_model() -> RandomForestClassifier:
+    return RandomForestClassifier(
+        n_estimators=200, max_depth=12, min_samples_leaf=3,
+        class_weight="balanced_subsample", random_state=42, n_jobs=-1,
+    )
+
+
 def evaluate(y: np.ndarray, score: np.ndarray, threshold: float = 0.5) -> dict:
     prediction = (score >= threshold).astype(int)
     n_review = max(1, math.ceil(len(y) * 0.2))
@@ -50,10 +57,7 @@ def train(manifest_path: Path, test_event: str, out_dir: Path, event_prefix: str
     if len(set(y[train_mask])) < 2 or len(set(y[test_mask])) < 2:
         raise ValueError("Both train and held-out event need severe and non-severe examples")
 
-    model = RandomForestClassifier(
-        n_estimators=200, max_depth=12, min_samples_leaf=3,
-        class_weight="balanced_subsample", random_state=42, n_jobs=-1,
-    )
+    model = make_model()
     model.fit(x[train_mask], y[train_mask])
     model_score = model.predict_proba(x[test_mask])[:, 1]
     baseline_score = difference[test_mask]

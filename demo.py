@@ -1,8 +1,9 @@
-"""Interactive, read-only case study and local xBD building-review explorer."""
+"""Local disaster triage case study, blind review workflow, and error analysis."""
 
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import math
 import os
@@ -13,6 +14,8 @@ import streamlit as st
 from PIL import Image, ImageDraw
 
 from disaster_triage.ui_data import case_filter, ranked_queue
+from disaster_triage.review_store import load_reviews, save_review
+from disaster_triage.sample_demo import make_sample_demo
 
 
 ROOT = Path(__file__).resolve().parent
@@ -20,6 +23,8 @@ RESULTS_DIR = Path(os.environ.get("TRIAGE_RESULTS_DIR", ROOT / "results"))
 PUBLISHED_METRICS = ROOT / "assets" / "held-out-metrics.json"
 PREDICTIONS_FILE = RESULTS_DIR / "predictions.csv"
 METRICS_FILE = RESULTS_DIR / "metrics.json"
+REVIEW_DB = Path(os.environ.get("TRIAGE_REVIEW_DB", ROOT / "results" / "reviews.sqlite3"))
+CROSS_EVENT_FILE = ROOT / "assets" / "cross-event-metrics.csv"
 
 st.set_page_config(
     page_title="Disaster Damage Triage",
@@ -71,6 +76,10 @@ if PREDICTIONS_FILE.exists():
         st.warning(f"The local prediction table could not be loaded: {error}")
 
 local_explorer = using_local_metrics and predictions is not None
+sample_predictions = make_sample_demo(ROOT / "results" / "synthetic-demo")
+review_predictions = predictions if local_explorer else sample_predictions
+review_is_synthetic = not local_explorer
+dataset_key = "synthetic-demo-v1" if review_is_synthetic else hashlib.sha256(PREDICTIONS_FILE.read_bytes()).hexdigest()[:16]
 event_name = str(metrics.get("test_event", "held-out disaster")).replace("-", " ").title()
 review_count = math.ceil(model_metrics["samples"] * 0.2)
 
@@ -80,12 +89,12 @@ with st.sidebar:
     if local_explorer:
         st.markdown('<span class="status-pill">Local image explorer ready</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span class="status-pill warn">Published results mode</span>', unsafe_allow_html=True)
+        st.markdown('<span class="status-pill warn">Published results + synthetic practice</span>', unsafe_allow_html=True)
     st.divider()
     st.markdown("**What you're seeing**")
     st.write("A retrospective xBD experiment. Damage labels are used to check the ranking, never to generate its scores.")
     st.link_button("View code and methods ↗", "https://github.com/TBN-01/disaster-damage-triage", width="stretch")
-    st.caption("Imagery and building annotations are not uploaded or redistributed by this app.")
+    st.caption("Real xBD imagery stays on this computer. The built-in interactive example uses synthetic images.")
 
 st.markdown(
     '<div class="hero"><span class="eyebrow">Satellite imagery · data science · human-in-the-loop</span>'
@@ -95,7 +104,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-results_tab, explore_tab, method_tab = st.tabs(["The result", "Explore the queue", "How it works"])
+results_tab, scorecard_tab, review_tab, explore_tab, errors_tab, method_tab = st.tabs([
+    "The result", "Across disasters", "Review desk", "Explore the queue", "Error gallery", "How it works",
+])
 
 with results_tab:
     st.subheader(f"A tougher test: {event_name}")
@@ -136,6 +147,86 @@ with results_tab:
         st.markdown('<div class="note-card"><h3>Why the trained model matters</h3><p>It is tempting to assume a more complex model will win. Here it did not. Testing on an entirely different disaster exposed a weakness that a random building split could have hidden.</p></div>', unsafe_allow_html=True)
     with right:
         st.markdown('<div class="note-card"><h3>What the score actually means</h3><p>A higher image-change score moves a building earlier in the queue. It is not a probability that the building is damaged, and it is never a substitute for a qualified human assessment.</p></div>', unsafe_allow_html=True)
+
+with scorecard_tab:
+    st.subheader("Does the ranking transfer to other disasters?")
+    st.write("Each row holds out one entire disaster, trains the random forest on the others, and checks how many severe cases appear in the first 20% reviewed.")
+    if CROSS_EVENT_FILE.exists():
+        cross = pd.read_csv(CROSS_EVENT_FILE)
+        cross["Event"] = cross["event"].str.replace("-", " ").str.title()
+        chart = cross.pivot(index="Event", columns="method", values="recall_at_20_percent_reviewed")
+        st.dataframe(chart.style.format("{:.1%}"), width="stretch")
+        details = cross[cross["method"] == "Simple image change"].copy()
+        details["Severe share"] = details["severe_prevalence"].map(lambda value: f"{value:.1%}")
+        details["95% tile-resample range"] = details.apply(
+            lambda row: f"{row['recall_ci_low']:.1%}–{row['recall_ci_high']:.1%}", axis=1,
+        )
+        st.dataframe(details[["Event", "buildings", "tiles", "severe", "Severe share", "95% tile-resample range"]].rename(columns={
+            "buildings": "Buildings", "tiles": "Tiles", "severe": "Severe labels",
+        }), width="stretch", hide_index=True)
+        st.caption("The ranges resample image tiles within each event. They describe instability in this sampled dataset, not uncertainty about future field performance. Events with few severe labels are especially fragile. Image change is a ranking score, not a probability.")
+        st.download_button("Download event scorecard", cross.to_csv(index=False), file_name="cross-event-metrics.csv", mime="text/csv")
+    else:
+        st.info("The all-event scorecard has not been generated yet. Run the cross-validation command in the README to add it.")
+
+with review_tab:
+    st.subheader("Try the review desk")
+    if review_is_synthetic:
+        st.warning("Interactive practice mode: these 24 image pairs, labels, and scores are synthetic. They are not part of the reported xBD evaluation.")
+    else:
+        st.info("Using your local xBD results. Historical labels stay hidden until a review decision is submitted.")
+    review_method = st.selectbox("Queue order", ["Simple image change", "Trained model"], key="review_method")
+    review_score = "baseline_score" if review_method == "Simple image change" else "model_score"
+    if review_score not in review_predictions:
+        st.error("This prediction table lacks the selected score.")
+    else:
+        review_ranked, _ = ranked_queue(review_predictions, review_score, 0.2)
+        prior = load_reviews(REVIEW_DB, dataset_key)
+        reviewed_ids = set(prior["sample_id"].astype(str))
+        choice = st.radio("Show", ["Not yet reviewed", "Reviewed", "All"], horizontal=True, key="review_filter")
+        visible = review_ranked.copy()
+        if choice == "Not yet reviewed":
+            visible = visible[~visible["sample_id"].astype(str).isin(reviewed_ids)]
+        elif choice == "Reviewed":
+            visible = visible[visible["sample_id"].astype(str).isin(reviewed_ids)]
+        st.progress(min(len(reviewed_ids) / len(review_ranked), 1.0), text=f"{len(reviewed_ids):,} of {len(review_ranked):,} reviewed on this computer")
+        if visible.empty:
+            st.success("No buildings remain in this view. Choose another filter to revisit decisions.")
+        else:
+            st.dataframe(visible[["rank", "sample_id", review_score]].rename(columns={
+                "rank": "Queue position", "sample_id": "Building ID", review_score: "Ranking score",
+            }).head(40), width="stretch", hide_index=True, height=230)
+            selected_id = st.selectbox("Building to inspect", visible["sample_id"].astype(str).tolist(), key="review_id")
+            case = visible[visible["sample_id"].astype(str) == selected_id].iloc[0]
+            st.caption(f"Queue position {int(case['rank']):,}. The score orders reviews; it does not diagnose damage.")
+            left, right = st.columns(2)
+            if Path(case["pre_crop"]).exists() and Path(case["post_crop"]).exists():
+                left.image(str(case["pre_crop"]), caption="Before", width="stretch")
+                right.image(str(case["post_crop"]), caption="After", width="stretch")
+            else:
+                st.warning("This building's image crops are unavailable on this computer.")
+            previous = prior[prior["sample_id"].astype(str) == selected_id]
+            if previous.empty:
+                with st.form("blind_review_form", clear_on_submit=False):
+                    decision = st.radio("Your assessment", ["Severe", "Not severe", "Unsure"], index=None)
+                    submitted = st.form_submit_button("Save assessment and reveal historical label", type="primary")
+                if submitted:
+                    if decision is None:
+                        st.warning("Choose an assessment first.")
+                    else:
+                        save_review(REVIEW_DB, dataset_key, selected_id, decision)
+                        st.rerun()
+            else:
+                decision = str(previous.iloc[0]["decision"])
+                ground_truth = "Severe" if bool(case["severe"]) else "Not severe"
+                st.success(f"Your assessment: {decision} · {'Simulated' if review_is_synthetic else 'Historical xBD'} label: {ground_truth}")
+                st.caption("The comparison is educational; it is not a safety verdict.")
+        if not prior.empty:
+            joined = prior.merge(review_ranked[["sample_id", "severe"]], on="sample_id", how="inner")
+            certain = joined[joined["decision"] != "Unsure"]
+            agreements = int(((certain["decision"] == "Severe") == certain["severe"].astype(bool)).sum())
+            st.caption(f"Saved locally: {len(joined)} reviews · {agreements}/{len(certain)} assessments matched the {'simulated' if review_is_synthetic else 'historical'} label (excluding Unsure).")
+            st.download_button("Export my review decisions", joined.to_csv(index=False), file_name="local-review-decisions.csv", mime="text/csv")
 
 with explore_tab:
     st.subheader("Explore a human-review queue")
@@ -219,6 +310,46 @@ with explore_tab:
                     else:
                         st.info("The original satellite tiles are not available in this local results folder.")
 
+with errors_tab:
+    st.subheader("Where the queue gets it wrong")
+    if review_is_synthetic:
+        st.warning("These example images and errors are synthetic. Load local xBD predictions to inspect real held-out cases.")
+    else:
+        st.write("These are real held-out cases from your local xBD run. The label comparison is retrospective and does not establish why an individual ranking failed.")
+    error_method = st.selectbox("Ranking to inspect", ["Simple image change", "Trained model"], key="error_method")
+    error_score = "baseline_score" if error_method == "Simple image change" else "model_score"
+    if error_score in review_predictions:
+        error_ranked, _ = ranked_queue(review_predictions, error_score, 0.2)
+        error_type = st.radio("Error type", ["Severe cases missed", "False alarms"], horizontal=True)
+        examples = case_filter(error_ranked, error_type)
+        st.metric("Cases in this category", f"{len(examples):,}")
+        if error_type == "Severe cases missed":
+            st.write("These severe-label buildings fell outside the first 20% reviewed. Check whether damage is hard to see at this scale, localized, or obscured. Those are inspection prompts—not confirmed causes.")
+        else:
+            st.write("These buildings entered the first 20% but lack a severe label. Check for shadows, lighting or seasonal change, image alignment, and nearby changes. Those are inspection prompts—not confirmed causes.")
+        if examples.empty:
+            st.info("No cases in this category for the selected ranking.")
+        else:
+            count = min(6, len(examples))
+            for case in examples.head(count).itertuples(index=False):
+                with st.container(border=True):
+                    st.write(f"**{case.sample_id}** · queue position {case.rank:,} · {'simulated' if review_is_synthetic else 'historical'} label: {case.subtype}")
+                    before, after = st.columns(2)
+                    if Path(case.pre_crop).exists() and Path(case.post_crop).exists():
+                        before.image(case.pre_crop, caption="Before", width="stretch")
+                        after.image(case.post_crop, caption="After", width="stretch")
+                        if review_is_synthetic:
+                            number = int(str(case.sample_id).split("-")[-1]) - 1
+                            if error_type == "False alarms" and number in {1, 6, 15, 19}:
+                                st.caption("Synthetic cause: a large dark region was added to imitate a lighting or shadow change without simulated structural damage.")
+                            elif error_type == "Severe cases missed" and number in {9, 20}:
+                                st.caption("Synthetic cause: the damaged area was deliberately kept small, giving this case a weaker overall change score.")
+                        else:
+                            st.caption("Possible checks: alignment, lighting, occlusion, building size, and whether surrounding changes dominate the crop. No cause has been verified for this case.")
+                    else:
+                        st.warning("This case's local image crops are missing.")
+            st.caption(f"Showing the first {count} cases in ranked order. A visual pattern should be recorded as a hypothesis, not a verified explanation.")
+
 with method_tab:
     st.subheader("What the project does—and does not do")
     st.markdown('<p class="section-intro">The research question is whether a limited human review team can see more severe cases sooner. This is a ranking problem, not a replacement for inspectors.</p>', unsafe_allow_html=True)
@@ -226,7 +357,7 @@ with method_tab:
         ("1. Match images and labels", "Read xBD before/after satellite tiles and the human-labeled building polygons."),
         ("2. Make building pairs", "Crop each known building location in both images, with a little surrounding context."),
         ("3. Rank and compare", "Compare a transparent image-change score with a random forest trained on image summaries."),
-        ("4. Test on a new event", "Keep an entire disaster out of training, then measure severe cases found within the first 20% reviewed."),
+        ("4. Test across events", "Keep each disaster out of training in turn, then measure severe cases found within the first 20% reviewed."),
     ]
     for title, description in steps:
         st.markdown(f'<div class="note-card" style="margin-bottom:.65rem"><h3>{title}</h3><p>{description}</p></div>', unsafe_allow_html=True)
@@ -238,4 +369,4 @@ with method_tab:
     with st.expander("Why did the random forest lose?"):
         st.write("Its features may have picked up patterns specific to the training disasters. That is a hypothesis, not a proven cause. The observed result is that it ranked severe buildings much worse than simple image change on the held-out wildfire.")
 
-    st.caption("Dataset: xBD / xView2. This app does not redistribute the source imagery or annotations. See the repository for attribution, license terms, tests, and reproducibility instructions.")
+    st.caption("Dataset: xBD / xView2. The portable practice images are synthetic. This app does not redistribute xBD imagery or annotations. See the repository for attribution, license terms, tests, and reproducibility instructions.")

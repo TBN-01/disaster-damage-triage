@@ -9,6 +9,9 @@ from disaster_triage.inspect_data import inspect
 from disaster_triage.prepare import polygon_box, prepare
 from disaster_triage.train import evaluate, train
 from disaster_triage.ui_data import case_filter, ranked_queue
+from disaster_triage.cross_validate import cross_validate, tile_bootstrap_interval, top_review
+from disaster_triage.review_store import load_reviews, save_review
+from disaster_triage.sample_demo import make_sample_demo
 
 
 def make_tile(root: Path, event: str, number: int) -> None:
@@ -85,4 +88,39 @@ def test_queue_rejects_invalid_budget() -> None:
             pass
         else:
             raise AssertionError(f"Expected invalid budget {budget} to fail")
+
+
+def test_cross_event_evaluation_uses_whole_events(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    for event in ("event-a", "event-b", "event-c"):
+        for tile in range(2):
+            make_tile(raw, event, tile)
+    frame = prepare(raw, tmp_path / "processed")
+    result = cross_validate(tmp_path / "processed" / "manifest.csv", tmp_path / "cross", bootstrap_repetitions=10)
+    assert len(result) == 6
+    assert set(result["event"]) == set(frame["event"])
+    assert all(result["buildings"] == 4)
+    assert all(result["tiles"] == 2)
+    assert (tmp_path / "cross" / "fold_predictions.csv").exists()
+    assert (tmp_path / "cross" / "summary.json").exists()
+
+
+def test_top_review_and_tile_interval() -> None:
+    y = np.array([1, 0, 1, 0, 0])
+    score = np.array([0.9, 0.8, 0.1, 0.2, 0.3])
+    assert top_review(y, score) == (1, 2, 1)
+    low, high = tile_bootstrap_interval(y, score, np.array(["a", "a", "b", "b", "b"]), repetitions=20)
+    assert 0 <= low <= high <= 1
+
+
+def test_synthetic_demo_and_review_persistence(tmp_path: Path) -> None:
+    frame = make_sample_demo(tmp_path / "sample")
+    assert len(frame) == 24
+    assert all(Path(path).exists() for path in frame["post_crop"])
+    assert len(make_sample_demo(tmp_path / "sample")) == 24
+    database = tmp_path / "reviews.sqlite3"
+    save_review(database, "synthetic-demo-v1", "DEMO-001", "Unsure")
+    save_review(database, "synthetic-demo-v1", "DEMO-001", "Severe")
+    assert load_reviews(database, "synthetic-demo-v1")["decision"].tolist() == ["Severe"]
+    assert load_reviews(database, "other").empty
 

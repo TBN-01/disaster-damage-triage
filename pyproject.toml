@@ -24,6 +24,7 @@ test = ["pytest>=8.0"]
 [project.scripts]
 triage-prepare = "disaster_triage.prepare:main"
 triage-train = "disaster_triage.train:main"
+triage-cross-validate = "disaster_triage.cross_validate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
