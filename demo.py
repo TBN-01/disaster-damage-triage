@@ -85,21 +85,21 @@ review_count = math.ceil(model_metrics["samples"] * 0.2)
 
 with st.sidebar:
     st.markdown("### 🛰️ Disaster Damage Triage")
-    st.caption("A data-science case study in prioritizing human review.")
+    st.caption("A small project about which buildings to check first after a disaster.")
     if local_explorer:
         st.markdown('<span class="status-pill">Local image explorer ready</span>', unsafe_allow_html=True)
     else:
-        st.markdown('<span class="status-pill warn">Published results + synthetic practice</span>', unsafe_allow_html=True)
+        st.markdown('<span class="status-pill warn">Results + practice images</span>', unsafe_allow_html=True)
     st.divider()
     st.markdown("**What you're seeing**")
-    st.write("A retrospective xBD experiment. Damage labels are used to check the ranking, never to generate its scores.")
-    st.link_button("View code and methods ↗", "https://github.com/TBN-01/disaster-damage-triage", width="stretch")
-    st.caption("Real xBD imagery stays on this computer. The built-in interactive example uses synthetic images.")
+    st.write("I used past disasters to test the queue. Their damage labels let me check the results; the ranking does not get to see them.")
+    st.link_button("See the project on GitHub ↗", "https://github.com/TBN-01/disaster-damage-triage", width="stretch")
+    st.caption("The practice images are made up. Real xBD images are not included in this app download.")
 
 st.markdown(
-    '<div class="hero"><span class="eyebrow">Satellite imagery · data science · human-in-the-loop</span>'
+    '<div class="hero"><span class="eyebrow">Before-and-after satellite images</span>'
     '<h1>Which buildings should be reviewed first?</h1>'
-    '<p>After a disaster, there may be too many buildings to inspect at once. This project tests whether before-and-after imagery can help put the most urgent cases near the front of a human review queue.</p>'
+    '<p>If there are too many buildings to check at once, can image changes help put the most important ones earlier in the line? That is what I tested here.</p>'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -109,18 +109,17 @@ results_tab, scorecard_tab, review_tab, explore_tab, errors_tab, method_tab = st
 ])
 
 with results_tab:
-    st.subheader(f"A tougher test: {event_name}")
+    st.subheader(f"A new-disaster test: {event_name}")
     st.markdown(
-        '<p class="section-intro">Every building from this disaster was kept out of the model’s training data. '
-        'The goal is to find severe cases within a limited review budget—not to automatically certify damage.</p>',
+        '<p class="section-intro">I kept this entire disaster out of the training data, then asked how many severe cases would turn up if someone checked only the first 20% of the queue.</p>',
         unsafe_allow_html=True,
     )
     severe_count = model_metrics["severe_buildings"]
     st.markdown(
         '<div class="metric-strip">'
-        f'<div class="metric-tile"><span class="value">{model_metrics["samples"]:,}</span><span class="label">buildings in the held-out event</span></div>'
+        f'<div class="metric-tile"><span class="value">{model_metrics["samples"]:,}</span><span class="label">buildings in this disaster sample</span></div>'
         f'<div class="metric-tile"><span class="value">{severe_count:,}</span><span class="label">labeled major damage or destroyed</span></div>'
-        f'<div class="metric-tile"><span class="value">{review_count:,}</span><span class="label">reviewed at a 20% budget</span></div>'
+        f'<div class="metric-tile"><span class="value">{review_count:,}</span><span class="label">buildings in the first 20% of the queue</span></div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -136,21 +135,28 @@ with results_tab:
     if baseline_metrics:
         found_baseline = round(baseline_metrics["recall_at_20_percent_reviewed"] * severe_count)
         found_model = round(model_metrics["recall_at_20_percent_reviewed"] * severe_count)
-        st.success(
-            f"The simple change score found {found_baseline} of {severe_count} severe cases in the first "
-            f"{review_count} reviews. The trained model found {found_model}. For this disaster, the simpler method is the better queue."
+        comparison = (
+            "The simple score made the better queue for this disaster."
+            if found_baseline > found_model else
+            "The trained model made the better queue for this disaster."
+            if found_model > found_baseline else
+            "They found the same number of severe cases here."
         )
-    st.caption("These numbers describe one held-out event in a sampled research dataset. They are not field accuracy or a safety guarantee.")
+        st.info(
+            f"The simple change score found {found_baseline} of {severe_count} severe cases in the first "
+            f"{review_count} reviews. The trained model found {found_model}. {comparison}"
+        )
+    st.caption("These are results from one historical sample, not a safety guarantee or a prediction of how a new disaster would go.")
 
     left, right = st.columns(2, gap="large")
     with left:
-        st.markdown('<div class="note-card"><h3>Why the trained model matters</h3><p>It is tempting to assume a more complex model will win. Here it did not. Testing on an entirely different disaster exposed a weakness that a random building split could have hidden.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="note-card"><h3>Why I tested both</h3><p>I wanted to know whether training a model actually helped. The answer changed depending on the disaster, which is why I kept both results.</p></div>', unsafe_allow_html=True)
     with right:
-        st.markdown('<div class="note-card"><h3>What the score actually means</h3><p>A higher image-change score moves a building earlier in the queue. It is not a probability that the building is damaged, and it is never a substitute for a qualified human assessment.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="note-card"><h3>What the score means</h3><p>A higher score moves a building earlier in the line. It does not tell you the chance of damage, and it cannot replace an inspection.</p></div>', unsafe_allow_html=True)
 
 with scorecard_tab:
-    st.subheader("Does the ranking transfer to other disasters?")
-    st.write("Each row holds out one entire disaster, trains the random forest on the others, and checks how many severe cases appear in the first 20% reviewed.")
+    st.subheader("What happened on the other disasters?")
+    st.write("I repeated the same test ten times, leaving out a different disaster each time. The table shows how many severe cases each method put in the first 20% of the queue.")
     if CROSS_EVENT_FILE.exists():
         cross = pd.read_csv(CROSS_EVENT_FILE)
         cross["Event"] = cross["event"].str.replace("-", " ").str.title()
@@ -164,15 +170,15 @@ with scorecard_tab:
         st.dataframe(details[["Event", "buildings", "tiles", "severe", "Severe share", "95% tile-resample range"]].rename(columns={
             "buildings": "Buildings", "tiles": "Tiles", "severe": "Severe labels",
         }), width="stretch", hide_index=True)
-        st.caption("The ranges resample image tiles within each event. They describe instability in this sampled dataset, not uncertainty about future field performance. Events with few severe labels are especially fragile. Image change is a ranking score, not a probability.")
+        st.caption("The extra ranges show how much these sample results can shift when image tiles are resampled. They do not tell us how a future disaster will go. Events with very few severe labels are especially shaky.")
         st.download_button("Download event scorecard", cross.to_csv(index=False), file_name="cross-event-metrics.csv", mime="text/csv")
     else:
-        st.info("The all-event scorecard has not been generated yet. Run the cross-validation command in the README to add it.")
+        st.info("The all-event scorecard is missing. The command to rebuild it is in METHODS.md.")
 
 with review_tab:
-    st.subheader("Try the review desk")
+    st.subheader("Try making the call yourself")
     if review_is_synthetic:
-        st.warning("Interactive practice mode: these 24 image pairs, labels, and scores are synthetic. They are not part of the reported xBD evaluation.")
+        st.warning("Practice mode: these 24 image pairs are made up. They are not part of the xBD results above.")
     else:
         st.info("Using your local xBD results. Historical labels stay hidden until a review decision is submitted.")
     review_method = st.selectbox("Queue order", ["Simple image change", "Trained model"], key="review_method")
@@ -231,9 +237,9 @@ with review_tab:
 with explore_tab:
     st.subheader("Explore a human-review queue")
     if not local_explorer:
-        st.info("The public case study is available without downloading imagery. To inspect individual buildings, run the xBD pipeline locally and point this app at its results folder.")
+        st.info("The published results are here, but the real building images are not included. To inspect them, download xBD separately and run the setup steps in METHODS.md.")
         st.code("triage-prepare --data-root C:\\path\\to\\xBD --out data\\processed --max-tiles-per-event 30 --seed 42\ntriage-train --manifest data\\processed\\manifest.csv --test-event santa-rosa-wildfire --out results\nstreamlit run demo.py", language="powershell")
-        st.link_button("Read the setup guide ↗", "https://github.com/TBN-01/disaster-damage-triage#obtain-data-and-run")
+        st.link_button("Read the setup guide ↗", "https://github.com/TBN-01/disaster-damage-triage/blob/main/METHODS.md#run-the-full-pipeline")
     else:
         score_options = {"Simple image change": "baseline_score", "Trained model": "model_score"}
         score_options = {label: column for label, column in score_options.items() if column in predictions.columns}
@@ -252,7 +258,7 @@ with explore_tab:
         m1.metric("Buildings to review", f"{queue['review_count']:,}")
         m2.metric("Severe cases found", f"{queue['severe_found']:,} / {queue['severe_total']:,}")
         m3.metric("Severe-case recall", pct(queue["recall"]))
-        st.caption("Change the budget to see the tradeoff. Historical xBD labels let us evaluate the queue; they would not be known during a real response.")
+        st.caption("Move the slider to see what happens when someone can review more or fewer buildings. These historical labels are for checking the result; they would not exist yet after a new disaster.")
 
         filter_choice = st.selectbox(
             "Show cases",
@@ -311,7 +317,7 @@ with explore_tab:
                         st.info("The original satellite tiles are not available in this local results folder.")
 
 with errors_tab:
-    st.subheader("Where the queue gets it wrong")
+    st.subheader("Where the queue got it wrong")
     if review_is_synthetic:
         st.warning("These example images and errors are synthetic. Load local xBD predictions to inspect real held-out cases.")
     else:
@@ -351,22 +357,22 @@ with errors_tab:
             st.caption(f"Showing the first {count} cases in ranked order. A visual pattern should be recorded as a hypothesis, not a verified explanation.")
 
 with method_tab:
-    st.subheader("What the project does—and does not do")
-    st.markdown('<p class="section-intro">The research question is whether a limited human review team can see more severe cases sooner. This is a ranking problem, not a replacement for inspectors.</p>', unsafe_allow_html=True)
+    st.subheader("How I put this together")
+    st.markdown('<p class="section-intro">The goal is to put more severe cases near the front of a limited review queue—not to replace inspectors.</p>', unsafe_allow_html=True)
     steps = [
-        ("1. Match images and labels", "Read xBD before/after satellite tiles and the human-labeled building polygons."),
-        ("2. Make building pairs", "Crop each known building location in both images, with a little surrounding context."),
-        ("3. Rank and compare", "Compare a transparent image-change score with a random forest trained on image summaries."),
-        ("4. Test across events", "Keep each disaster out of training in turn, then measure severe cases found within the first 20% reviewed."),
+        ("1. Pair the images", "Use the xBD labels to find the same building in its before and after images."),
+        ("2. Crop each building", "Keep a little of the surrounding area so the images have context."),
+        ("3. Make two queues", "Rank by simple image change, then compare it with a trained random forest."),
+        ("4. Test on disasters the model hasn't seen", "Leave out one whole event at a time and check the first 20% of each queue."),
     ]
     for title, description in steps:
         st.markdown(f'<div class="note-card" style="margin-bottom:.65rem"><h3>{title}</h3><p>{description}</p></div>', unsafe_allow_html=True)
 
     with st.expander("Aren't the damage labels already public?"):
-        st.write("Yes—for these historical disasters. That is what makes it possible to test the ranking. After a new disaster, those reviewed building labels would not be available yet. This project studies how to prioritize that work, not how to re-publish known answers.")
+        st.write("Yes, for these past disasters. That's how I can check whether the ranking worked. After a new disaster, those damage labels would not exist yet; someone would still have to review the buildings.")
     with st.expander("Can this tell me whether a building is safe?"):
         st.write("No. It assumes building locations are already known, uses satellite imagery rather than an on-site inspection, and has only been evaluated on sampled research data. Shadows, smoke, image alignment, and changing conditions can mislead it.")
     with st.expander("Why did the random forest lose?"):
-        st.write("Its features may have picked up patterns specific to the training disasters. That is a hypothesis, not a proven cause. The observed result is that it ranked severe buildings much worse than simple image change on the held-out wildfire.")
+        st.write("It may have picked up patterns that didn't carry over to the wildfire. I can't prove that from this test alone. What I can say is that it did worse than simple image change on Santa Rosa, though it won on Hurricane Matthew.")
 
     st.caption("Dataset: xBD / xView2. The portable practice images are synthetic. This app does not redistribute xBD imagery or annotations. See the repository for attribution, license terms, tests, and reproducibility instructions.")
