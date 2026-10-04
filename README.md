@@ -11,7 +11,7 @@ This project ranks buildings for *human review*. It does not decide whether a bu
 - A pipeline that pairs before-and-after images for labeled buildings in [xBD](https://xview2.org/dataset).
 - Two ways to order a review queue: a straightforward image-change score and a trained random forest.
 - A test that holds out an entire disaster at a time, so the model is evaluated on events it did not train on.
-- A local app where you can explore the results, review image pairs before seeing their labels, and look through mistakes.
+- A local app where you can change the review budget, compare disasters, review image pairs before seeing their labels, and look through mistakes.
 
 For the main test, I sampled **24,465 labeled buildings across ten disasters**.
 
@@ -26,6 +26,8 @@ In the Santa Rosa wildfire sample, the simple image-change ranking found **288 o
 I then repeated the test with each of ten disasters held out in turn. The simple method did better than the random forest on eight, worse on one, and tied on one. But it was far from consistent: in the sampled Mexico earthquake event, **neither method found any of the seven severe cases** in the first 20% reviewed. The [full event-by-event results](assets/cross-event-metrics.csv) are here.
 
 That is the main lesson of the project for me: a model looking good on one disaster is not enough. Even the simpler method, which usually did better here, would need much more testing before anyone should use it to guide a real response.
+
+Three choices mattered: I measured **severe cases found within a review budget** rather than overall accuracy, held out **whole disasters** instead of random buildings, and kept the simple score next to the trained model. Those choices made the weak spots easier to see. The app lets you explore the [budget tradeoff](assets/review-budget-curves.csv) from 5% to 50% without sharing building-level predictions or imagery.
 
 ## Try it on your computer
 

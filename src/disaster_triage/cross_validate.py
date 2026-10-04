@@ -22,6 +22,27 @@ def top_review(y: np.ndarray, scores: np.ndarray, fraction: float = 0.2) -> tupl
     return int(y[top].sum()), int(y.sum()), count
 
 
+def budget_curves(predictions: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate each held-out queue at review budgets from 5% to 50%."""
+    required = {"event", "method", "severe", "score"}
+    if missing := required - set(predictions.columns):
+        raise ValueError(f"Predictions missing columns: {sorted(missing)}")
+    rows = []
+    for (event, method), group in predictions.groupby(["event", "method"], sort=True):
+        y = group["severe"].to_numpy(dtype=int)
+        score = group["score"].to_numpy(dtype=float)
+        for percent in range(5, 51, 5):
+            found, severe, reviewed = top_review(y, score, percent / 100)
+            rows.append({
+                "event": event, "method": method, "budget_percent": percent,
+                "buildings": len(y), "severe": severe, "reviewed": reviewed,
+                "severe_found": found,
+                "recall": found / severe if severe else np.nan,
+                "precision": found / reviewed,
+            })
+    return pd.DataFrame(rows)
+
+
 def tile_bootstrap_interval(
     y: np.ndarray, scores: np.ndarray, tiles: np.ndarray,
     repetitions: int = 500, seed: int = 42,
@@ -109,7 +130,9 @@ def cross_validate(
     out_dir.mkdir(parents=True, exist_ok=True)
     result = pd.DataFrame(rows)
     result.to_csv(out_dir / "event_metrics.csv", index=False)
-    pd.concat(predictions, ignore_index=True).to_csv(out_dir / "fold_predictions.csv", index=False)
+    fold_predictions = pd.concat(predictions, ignore_index=True)
+    fold_predictions.to_csv(out_dir / "fold_predictions.csv", index=False)
+    budget_curves(fold_predictions).to_csv(out_dir / "review_budget_curves.csv", index=False)
     summary = {
         "design": "Leave one disaster event out; 20% review budget; 200-tree random forest fitted on other events only.",
         "sample_buildings": int(len(frame)),

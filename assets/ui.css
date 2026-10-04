@@ -1,15 +1,15 @@
 /* Presentation-only styling; all project claims remain in the Python app. */
-.block-container { max-width: 1220px; padding-top: 2rem; padding-bottom: 3rem; }
+.block-container { max-width: 1220px; padding-top: 1.4rem; padding-bottom: 3rem; }
 div[data-testid="stAppViewContainer"] { background: #f5f7fb; }
 div[data-testid="stSidebar"] { background: #ecf2f7; }
 .hero {
   background: linear-gradient(125deg, #10243b 0%, #0d3d55 62%, #0d6475 100%);
-  color: #fff; border-radius: 24px; padding: 2.4rem 2.7rem; margin-bottom: 1.6rem;
+  color: #fff; border-radius: 22px; padding: 1.55rem 2rem; margin-bottom: 1rem;
   box-shadow: 0 16px 32px rgba(16, 36, 59, .12);
 }
 .eyebrow { color: #91e7e1; text-transform: uppercase; letter-spacing: .13em; font-size: .75rem; font-weight: 750; }
-.hero h1 { color: #fff; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1.1; margin: .7rem 0 1rem; }
-.hero p { color: #e5f0f5; font-size: 1.05rem; max-width: 48rem; margin: 0; line-height: 1.55; }
+.hero h1 { color: #fff; font-size: clamp(2rem, 3.6vw, 3rem); line-height: 1.08; margin: .45rem 0 .65rem; }
+.hero p { color: #e5f0f5; font-size: 1rem; max-width: 58rem; margin: 0; line-height: 1.45; }
 .note-card { background: #fff; border: 1px solid #dfe7ef; border-radius: 16px; padding: 1.25rem 1.4rem; height: 100%; }
 .note-card h3 { font-size: 1.04rem; margin: 0 0 .5rem; color: #10243b; }
 .note-card p { margin: 0; color: #46566b; line-height: 1.5; font-size: .94rem; }
@@ -35,7 +35,7 @@ div[data-testid="stMetricLabel"] { color: #526278; }
 div[data-testid="stTabs"] button { font-weight: 650; }
 @media (max-width: 700px) {
   .block-container { padding: 1rem .8rem 2rem; }
-  .hero { padding: 1.7rem 1.3rem; border-radius: 18px; }
+  .hero { padding: 1.3rem 1.15rem; border-radius: 18px; }
   .metric-strip { grid-template-columns: 1fr; }
   .result-row { grid-template-columns: 105px 1fr 54px; gap: .45rem; }
   .result-panel { padding: 1rem; }

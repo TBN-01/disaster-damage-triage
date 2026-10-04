@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 from disaster_triage.ui_data import case_filter, ranked_queue
 from disaster_triage.review_store import load_reviews, save_review
 from disaster_triage.sample_demo import make_sample_demo
+from disaster_triage.prepare import square_crop
 
 
 ROOT = Path(__file__).resolve().parent
@@ -25,12 +26,13 @@ PREDICTIONS_FILE = RESULTS_DIR / "predictions.csv"
 METRICS_FILE = RESULTS_DIR / "metrics.json"
 REVIEW_DB = Path(os.environ.get("TRIAGE_REVIEW_DB", ROOT / "results" / "reviews.sqlite3"))
 CROSS_EVENT_FILE = ROOT / "assets" / "cross-event-metrics.csv"
+CURVES_FILE = ROOT / "assets" / "review-budget-curves.csv"
 
 st.set_page_config(
     page_title="Disaster Damage Triage",
     page_icon="🛰️",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="collapsed",
 )
 st.markdown(f"<style>{(ROOT / 'assets' / 'ui.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
@@ -52,6 +54,33 @@ def result_row(label: str, value: float, color: str) -> str:
         f'<div class="bar-track"><div class="bar-fill {color}" style="width:{width:.1f}%"></div></div>'
         f'<span class="number">{value:.1%}</span></div>'
     )
+
+
+@st.cache_data(show_spinner=False, max_entries=96)
+def larger_pair(pre_tile: str, post_tile: str, box: tuple[float, float, float, float]) -> tuple[Image.Image, Image.Image]:
+    """Make a clearer display crop from the original tiles; scores stay unchanged."""
+    with Image.open(pre_tile) as source:
+        before = square_crop(source, box, 256)
+    with Image.open(post_tile) as source:
+        after = square_crop(source, box, 256)
+    return before, after
+
+
+def preview_pair(row: dict | pd.Series) -> tuple[Image.Image | str | None, Image.Image | str | None]:
+    """Prefer original tiles for display, with prepared crops as the fallback."""
+    pre_crop, post_crop = Path(str(row["pre_crop"])), Path(str(row["post_crop"]))
+    scene_fields = {"pre_tile", "post_tile", "x0", "y0", "x1", "y1"}
+    if scene_fields.issubset(row):
+        pre_tile, post_tile = Path(str(row["pre_tile"])), Path(str(row["post_tile"]))
+        if pre_tile.exists() and post_tile.exists():
+            try:
+                box = tuple(float(row[key]) for key in ("x0", "y0", "x1", "y1"))
+                return larger_pair(str(pre_tile), str(post_tile), box)
+            except (OSError, ValueError, TypeError):
+                pass
+    if pre_crop.exists() and post_crop.exists():
+        return str(pre_crop), str(post_crop)
+    return None, None
 
 
 try:
@@ -94,7 +123,10 @@ with st.sidebar:
     st.markdown("**What you're seeing**")
     st.write("I used past disasters to test the queue. Their damage labels let me check the results; the ranking does not get to see them.")
     st.link_button("See the project on GitHub ↗", "https://github.com/TBN-01/disaster-damage-triage", width="stretch")
-    st.caption("The practice images are made up. Real xBD images are not included in this app download.")
+    if local_explorer:
+        st.caption("Real xBD image crops are loaded from this computer only. They are not uploaded or included in the GitHub repo.")
+    else:
+        st.caption("The practice images are made up. Real xBD images are not included in this download.")
 
 st.markdown(
     '<div class="hero"><span class="eyebrow">Before-and-after satellite images</span>'
@@ -162,41 +194,66 @@ with results_tab:
     )
 
 with scorecard_tab:
-    st.subheader("What happened on the other disasters?")
-    st.write("I repeated the same test ten times, leaving out a different disaster each time. The table shows how many severe cases each method put in the first 20% of the queue.")
-    st.markdown(
-        '<div class="note-card"><h3>The short version</h3>'
-        '<p>Simple image change did better on eight events. The trained model did better on Hurricane Matthew. '
-        'On the sampled Mexico earthquake, neither found any of the seven severe cases in the first 20% reviewed. '
-        'A good result on one event does not make this ready for real use.</p></div>',
-        unsafe_allow_html=True,
-    )
-    if CROSS_EVENT_FILE.exists():
+    st.subheader("How many buildings can you review?")
+    st.write("Pick a past disaster and change the review budget. The question is: how many severe cases land near the front of the line when time is limited?")
+    if CROSS_EVENT_FILE.exists() and CURVES_FILE.exists():
         cross = pd.read_csv(CROSS_EVENT_FILE)
-        cross["Event"] = cross["event"].str.replace("-", " ").str.title()
-        chart = cross.pivot(index="Event", columns="method", values="recall_at_20_percent_reviewed")
-        st.dataframe(chart.style.format("{:.1%}"), width="stretch")
-        details = cross[cross["method"] == "Simple image change"].copy()
-        details["Severe share"] = details["severe_prevalence"].map(lambda value: f"{value:.1%}")
-        details["95% tile-resample range"] = details.apply(
-            lambda row: f"{row['recall_ci_low']:.1%}–{row['recall_ci_high']:.1%}", axis=1,
+        curves = pd.read_csv(CURVES_FILE)
+        event_options = sorted(curves["event"].unique())
+        event_index = event_options.index("santa-rosa-wildfire") if "santa-rosa-wildfire" in event_options else 0
+        select_col, budget_col = st.columns(2, gap="large")
+        with select_col:
+            selected_event = st.selectbox(
+                "Pick a disaster", event_options, index=event_index,
+                format_func=lambda event: event.replace("-", " ").title(),
+            )
+        with budget_col:
+            selected_budget = st.slider("How much of the queue can be reviewed?", 5, 50, 20, 5, format="%d%%")
+
+        event_curves = curves[curves["event"] == selected_event]
+        selected = event_curves[event_curves["budget_percent"] == selected_budget].set_index("method")
+        simple = selected.loc["Simple image change"]
+        forest = selected.loc["Random forest"]
+        first, second = st.columns(2, gap="large")
+        first.metric("Severe found · simple image change", f"{int(simple['severe_found']):,} / {int(simple['severe']):,}")
+        second.metric("Severe found · random forest", f"{int(forest['severe_found']):,} / {int(forest['severe']):,}")
+        st.caption(
+            f"At a {selected_budget}% budget, that means checking {int(simple['reviewed']):,} of "
+            f"{int(simple['buildings']):,} buildings from this sampled event. The labels are known now because this is a historical test."
         )
-        st.dataframe(details[["Event", "buildings", "tiles", "severe", "Severe share", "95% tile-resample range"]].rename(columns={
-            "buildings": "Buildings", "tiles": "Tiles", "severe": "Severe labels",
-        }), width="stretch", hide_index=True)
-        st.caption("The extra ranges show how much these sample results can shift when image tiles are resampled. They do not tell us how a future disaster will go. Events with very few severe labels are especially shaky.")
-        st.download_button("Download event scorecard", cross.to_csv(index=False), file_name="cross-event-metrics.csv", mime="text/csv")
+        plot = event_curves.pivot(index="budget_percent", columns="method", values="recall").rename(columns={
+            "Simple image change": "Simple image change", "Random forest": "Trained random forest",
+        })
+        plot["Random order (expected)"] = plot.index.to_numpy(dtype=float) / 100
+        st.line_chart(plot, height=290)
+        st.caption("Horizontal axis: percent of buildings reviewed. Vertical axis: share of severe cases found. The random-order line is an average reference, not a promise for any one run.")
+
+        if int(simple["severe"]) < 25:
+            st.warning("This event has very few severe labels in the sample. A small number of buildings can swing the percentages a lot.")
+        if int(simple["severe_found"]) == 0 and int(forest["severe_found"]) == 0:
+            st.error("Neither method reached a severe case at this budget. This is exactly the kind of failure the project needs to show.")
+
+        with st.expander("See the full ten-disaster comparison at 20%"):
+            cross["Event"] = cross["event"].str.replace("-", " ").str.title()
+            chart = cross.pivot(index="Event", columns="method", values="recall_at_20_percent_reviewed")
+            st.dataframe(chart.style.format("{:.1%}"), width="stretch")
+            st.write("The simple method did better on eight events, the trained model on one, and they tied on one. Individual events can still go badly.")
+            st.caption("The downloaded scorecard also includes event size, severe-label prevalence, average precision, and tile-resampling ranges. Those ranges describe this sample, not future field performance.")
+            st.download_button("Download the event scorecard", cross.to_csv(index=False), file_name="cross-event-metrics.csv", mime="text/csv")
+        st.download_button("Download all review-budget results", curves.to_csv(index=False), file_name="review-budget-curves.csv", mime="text/csv")
     else:
-        st.info("The all-event scorecard is missing. The command to rebuild it is in METHODS.md.")
+        st.info("The event results are missing. The command to rebuild them is in METHODS.md.")
 
 with review_tab:
     st.subheader("What would you decide?")
-    st.write("Look at a before-and-after pair, make your call, and then see the saved label. No pressure—this is practice, not a safety assessment.")
+    st.write("Compare the two images, make your call, then see the saved label. Your answer stays on this computer.")
     if review_is_synthetic:
-        st.info("These 24 practice images are made up. The research results on the other tabs use real xBD labels; your practice answers do not affect those numbers.")
+        st.caption("Practice images are made up. Your choices do not affect the real xBD results.")
     else:
-        st.info("Using your local xBD results. Historical labels stay hidden until a review decision is submitted.")
-    review_method = st.selectbox("Queue order", ["Simple image change", "Trained model"], key="review_method")
+        st.caption("Using real xBD images from this computer. The historical label stays hidden until you answer.")
+    order_col, view_col = st.columns(2, gap="large")
+    with order_col:
+        review_method = st.selectbox("Queue order", ["Simple image change", "Trained model"], key="review_method")
     review_score = "baseline_score" if review_method == "Simple image change" else "model_score"
     if review_score not in review_predictions:
         st.error("This prediction table lacks the selected score.")
@@ -204,7 +261,8 @@ with review_tab:
         review_ranked, _ = ranked_queue(review_predictions, review_score, 0.2)
         prior = load_reviews(REVIEW_DB, dataset_key)
         reviewed_ids = set(prior["sample_id"].astype(str))
-        choice = st.radio("Show", ["Not yet reviewed", "Reviewed", "All"], horizontal=True, key="review_filter")
+        with view_col:
+            choice = st.selectbox("Which cases?", ["Not yet reviewed", "Reviewed", "All"], key="review_filter")
         just_reviewed = st.session_state.get("just_reviewed_id")
         visible = review_ranked.copy()
         if choice == "Not yet reviewed":
@@ -229,9 +287,10 @@ with review_tab:
             case = visible[visible["sample_id"].astype(str) == selected_id].iloc[0]
             st.caption(f"Building {selected_id} · #{int(case['rank']):,} in this queue. The score only decides review order.")
             left, right = st.columns(2)
-            if Path(case["pre_crop"]).exists() and Path(case["post_crop"]).exists():
-                left.image(str(case["pre_crop"]), caption="Before", width="stretch")
-                right.image(str(case["post_crop"]), caption="After", width="stretch")
+            before_image, after_image = preview_pair(case)
+            if before_image is not None and after_image is not None:
+                left.image(before_image, caption="Before", width="stretch")
+                right.image(after_image, caption="After", width="stretch")
             else:
                 st.warning("This building's image crops are unavailable on this computer.")
             previous = prior[prior["sample_id"].astype(str) == selected_id]
@@ -279,11 +338,12 @@ with review_tab:
 
 with explore_tab:
     st.divider()
-    st.subheader("Look at individual building rankings")
+    st.subheader(f"Inspect individual {event_name} buildings")
     if not local_explorer:
         st.info("Real building images are not bundled with the app. If you want to inspect them on your own computer, the dataset and setup steps are in METHODS.md.")
         st.link_button("Read the setup guide ↗", "https://github.com/TBN-01/disaster-damage-triage/blob/main/METHODS.md#run-the-full-pipeline")
     else:
+        st.caption("This section uses the one held-out event loaded on this computer. Its controls are separate from the across-disaster comparison above.")
         score_options = {"Simple image change": "baseline_score", "Trained model": "model_score"}
         score_options = {label: column for label, column in score_options.items() if column in predictions.columns}
         if not score_options:
@@ -332,11 +392,11 @@ with explore_tab:
             selected = filtered[filtered["sample_id"].astype(str) == selected_id].iloc[0]
             selected_status = "In the review queue" if selected["review_priority"] else "Outside the current review budget"
             st.write(f"**Rank {int(selected['rank']):,}** · {selected_status} · historical label: **{selected['subtype']}**")
-            pre_crop, post_crop = Path(selected["pre_crop"]), Path(selected["post_crop"])
-            if pre_crop.exists() and post_crop.exists():
+            before_image, after_image = preview_pair(selected)
+            if before_image is not None and after_image is not None:
                 before_col, after_col = st.columns(2)
-                before_col.image(str(pre_crop), caption="Before", width="stretch")
-                after_col.image(str(post_crop), caption="After", width="stretch")
+                before_col.image(before_image, caption="Before", width="stretch")
+                after_col.image(after_image, caption="After", width="stretch")
             else:
                 st.warning("The image crops for this building are missing from the local dataset.")
 
@@ -385,9 +445,10 @@ with errors_tab:
                 with st.container(border=True):
                     st.write(f"**{case.sample_id}** · queue position {case.rank:,} · {'simulated' if review_is_synthetic else 'historical'} label: {case.subtype}")
                     before, after = st.columns(2)
-                    if Path(case.pre_crop).exists() and Path(case.post_crop).exists():
-                        before.image(case.pre_crop, caption="Before", width="stretch")
-                        after.image(case.post_crop, caption="After", width="stretch")
+                    before_image, after_image = preview_pair(case._asdict())
+                    if before_image is not None and after_image is not None:
+                        before.image(before_image, caption="Before", width="stretch")
+                        after.image(after_image, caption="After", width="stretch")
                         if review_is_synthetic:
                             number = int(str(case.sample_id).split("-")[-1]) - 1
                             if error_type == "False alarms" and number in {1, 6, 15, 19}:

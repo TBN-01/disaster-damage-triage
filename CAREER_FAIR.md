@@ -1,6 +1,6 @@
 # Notes for talking about the project
 
-Don't try to recite the whole README. Open the app, explain the question in **The story**, let someone make a choice in **Try a review**, then show one good result and one failure in **Explore the results**.
+Don't try to recite the whole README. Open the app, explain the question in **The story**, let someone make a choice in **Try a review**, then use **Explore the results** to change the review budget. Show Santa Rosa and then Mexico earthquake; the contrast is the point.
 
 ## A short version
 

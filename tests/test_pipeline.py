@@ -10,7 +10,7 @@ from disaster_triage.inspect_data import inspect
 from disaster_triage.prepare import polygon_box, prepare
 from disaster_triage.train import evaluate, train
 from disaster_triage.ui_data import case_filter, ranked_queue
-from disaster_triage.cross_validate import cross_validate, tile_bootstrap_interval, top_review
+from disaster_triage.cross_validate import budget_curves, cross_validate, tile_bootstrap_interval, top_review
 from disaster_triage.review_store import load_reviews, save_review
 from disaster_triage.sample_demo import make_sample_demo
 
@@ -103,7 +103,21 @@ def test_cross_event_evaluation_uses_whole_events(tmp_path: Path) -> None:
     assert all(result["buildings"] == 4)
     assert all(result["tiles"] == 2)
     assert (tmp_path / "cross" / "fold_predictions.csv").exists()
+    assert (tmp_path / "cross" / "review_budget_curves.csv").exists()
     assert (tmp_path / "cross" / "summary.json").exists()
+
+
+def test_budget_curves_match_top_review() -> None:
+    predictions = pd.DataFrame({
+        "event": ["one"] * 5, "method": ["Simple image change"] * 5,
+        "severe": [1, 0, 1, 0, 0], "score": [0.9, 0.8, 0.1, 0.2, 0.3],
+    })
+    curves = budget_curves(predictions)
+    at_twenty = curves[curves["budget_percent"] == 20].iloc[0]
+    assert at_twenty["reviewed"] == 1
+    assert at_twenty["severe_found"] == 1
+    assert at_twenty["recall"] == 0.5
+    assert at_twenty["precision"] == 1.0
 
 
 def test_top_review_and_tile_interval() -> None:
