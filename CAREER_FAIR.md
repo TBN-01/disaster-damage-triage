@@ -1,6 +1,6 @@
 # Notes for talking about the project
 
-Don't try to recite the whole README. Open the app, show two images, and explain the question first.
+Don't try to recite the whole README. Open the app, explain the question in **The story**, let someone make a choice in **Try a review**, then show one good result and one failure in **Explore the results**.
 
 ## A short version
 

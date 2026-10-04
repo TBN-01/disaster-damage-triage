@@ -17,6 +17,8 @@ For the main test, I sampled **24,465 labeled buildings across ten disasters**.
 
 The app includes a small **synthetic practice set** so you can try it without downloading the large xBD dataset. Those made-up images are only for the interactive demo; the results below come from real xBD labels.
 
+If you are showing the project to someone, the app has a simple path: **read the story → try a review → explore the full results**. In the practice review, you can write down what you noticed before the label is revealed. That note stays on your computer.
+
 ## What happened
 
 In the Santa Rosa wildfire sample, the simple image-change ranking found **288 of 361 severely damaged buildings** in the first **421 reviews**—the top 20% of buildings. The random forest found **116 of 361** in the same number of reviews.

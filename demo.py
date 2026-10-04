@@ -104,12 +104,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-results_tab, scorecard_tab, review_tab, explore_tab, errors_tab, method_tab = st.tabs([
-    "The result", "Across disasters", "Review desk", "Explore the queue", "Error gallery", "How it works",
-])
+story_tab, practice_tab, data_tab = st.tabs(["The story", "Try a review", "Explore the results"])
+results_tab = method_tab = story_tab
+review_tab = errors_tab = practice_tab
+scorecard_tab = explore_tab = data_tab
 
 with results_tab:
-    st.subheader(f"A new-disaster test: {event_name}")
+    st.subheader(f"One close look: {event_name}")
     st.markdown(
         '<p class="section-intro">I kept this entire disaster out of the training data, then asked how many severe cases would turn up if someone checked only the first 20% of the queue.</p>',
         unsafe_allow_html=True,
@@ -154,9 +155,22 @@ with results_tab:
     with right:
         st.markdown('<div class="note-card"><h3>What the score means</h3><p>A higher score moves a building earlier in the line. It does not tell you the chance of damage, and it cannot replace an inspection.</p></div>', unsafe_allow_html=True)
 
+    st.markdown("#### What the other tests showed")
+    st.write(
+        "The Santa Rosa result looked promising on its own. Once I repeated the test on other disasters, "
+        "the results were much less steady. That is why I show the misses too."
+    )
+
 with scorecard_tab:
     st.subheader("What happened on the other disasters?")
     st.write("I repeated the same test ten times, leaving out a different disaster each time. The table shows how many severe cases each method put in the first 20% of the queue.")
+    st.markdown(
+        '<div class="note-card"><h3>The short version</h3>'
+        '<p>Simple image change did better on eight events. The trained model did better on Hurricane Matthew. '
+        'On the sampled Mexico earthquake, neither found any of the seven severe cases in the first 20% reviewed. '
+        'A good result on one event does not make this ready for real use.</p></div>',
+        unsafe_allow_html=True,
+    )
     if CROSS_EVENT_FILE.exists():
         cross = pd.read_csv(CROSS_EVENT_FILE)
         cross["Event"] = cross["event"].str.replace("-", " ").str.title()
@@ -176,9 +190,10 @@ with scorecard_tab:
         st.info("The all-event scorecard is missing. The command to rebuild it is in METHODS.md.")
 
 with review_tab:
-    st.subheader("Try making the call yourself")
+    st.subheader("What would you decide?")
+    st.write("Look at a before-and-after pair, make your call, and then see the saved label. No pressure—this is practice, not a safety assessment.")
     if review_is_synthetic:
-        st.warning("Practice mode: these 24 image pairs are made up. They are not part of the xBD results above.")
+        st.info("These 24 practice images are made up. The research results on the other tabs use real xBD labels; your practice answers do not affect those numbers.")
     else:
         st.info("Using your local xBD results. Historical labels stay hidden until a review decision is submitted.")
     review_method = st.selectbox("Queue order", ["Simple image change", "Trained model"], key="review_method")
@@ -190,21 +205,29 @@ with review_tab:
         prior = load_reviews(REVIEW_DB, dataset_key)
         reviewed_ids = set(prior["sample_id"].astype(str))
         choice = st.radio("Show", ["Not yet reviewed", "Reviewed", "All"], horizontal=True, key="review_filter")
+        just_reviewed = st.session_state.get("just_reviewed_id")
         visible = review_ranked.copy()
         if choice == "Not yet reviewed":
-            visible = visible[~visible["sample_id"].astype(str).isin(reviewed_ids)]
+            visible = visible[
+                ~visible["sample_id"].astype(str).isin(reviewed_ids)
+                | (visible["sample_id"].astype(str) == just_reviewed)
+            ]
         elif choice == "Reviewed":
             visible = visible[visible["sample_id"].astype(str).isin(reviewed_ids)]
         st.progress(min(len(reviewed_ids) / len(review_ranked), 1.0), text=f"{len(reviewed_ids):,} of {len(review_ranked):,} reviewed on this computer")
         if visible.empty:
             st.success("No buildings remain in this view. Choose another filter to revisit decisions.")
         else:
-            st.dataframe(visible[["rank", "sample_id", review_score]].rename(columns={
-                "rank": "Queue position", "sample_id": "Building ID", review_score: "Ranking score",
-            }).head(40), width="stretch", hide_index=True, height=230)
-            selected_id = st.selectbox("Building to inspect", visible["sample_id"].astype(str).tolist(), key="review_id")
+            review_ids = visible["sample_id"].astype(str).tolist()
+            selected_id = st.selectbox(
+                "Choose a building (the next one is selected for you)", review_ids,
+                index=review_ids.index(just_reviewed) if just_reviewed in review_ids else 0,
+                key="review_id",
+            )
+            if selected_id != just_reviewed:
+                st.session_state.pop("just_reviewed_id", None)
             case = visible[visible["sample_id"].astype(str) == selected_id].iloc[0]
-            st.caption(f"Queue position {int(case['rank']):,}. The score orders reviews; it does not diagnose damage.")
+            st.caption(f"Building {selected_id} · #{int(case['rank']):,} in this queue. The score only decides review order.")
             left, right = st.columns(2)
             if Path(case["pre_crop"]).exists() and Path(case["post_crop"]).exists():
                 left.image(str(case["pre_crop"]), caption="Before", width="stretch")
@@ -214,19 +237,39 @@ with review_tab:
             previous = prior[prior["sample_id"].astype(str) == selected_id]
             if previous.empty:
                 with st.form("blind_review_form", clear_on_submit=False):
-                    decision = st.radio("Your assessment", ["Severe", "Not severe", "Unsure"], index=None)
-                    submitted = st.form_submit_button("Save assessment and reveal historical label", type="primary")
+                    answer = st.radio(
+                        "From these images, what do you think?",
+                        ["Looks badly damaged", "Doesn't look badly damaged", "I can't tell"], index=None,
+                    )
+                    note = st.text_area("What stood out to you? (optional)", max_chars=500, placeholder="For example: the roof looks different, but the shadow makes it hard to tell.")
+                    st.caption("For this project, 'severe' means the xBD label is major damage or destroyed. An image alone cannot tell you if a building is safe.")
+                    submitted = st.form_submit_button("Save my answer and reveal the label", type="primary")
                 if submitted:
-                    if decision is None:
-                        st.warning("Choose an assessment first.")
+                    if answer is None:
+                        st.warning("Pick an answer first, even if it's 'I can't tell.'")
                     else:
-                        save_review(REVIEW_DB, dataset_key, selected_id, decision)
+                        decision = {
+                            "Looks badly damaged": "Severe",
+                            "Doesn't look badly damaged": "Not severe",
+                            "I can't tell": "Unsure",
+                        }[answer]
+                        save_review(REVIEW_DB, dataset_key, selected_id, decision, note)
+                        st.session_state["just_reviewed_id"] = selected_id
                         st.rerun()
             else:
                 decision = str(previous.iloc[0]["decision"])
                 ground_truth = "Severe" if bool(case["severe"]) else "Not severe"
-                st.success(f"Your assessment: {decision} · {'Simulated' if review_is_synthetic else 'Historical xBD'} label: {ground_truth}")
-                st.caption("The comparison is educational; it is not a safety verdict.")
+                st.success(f"You chose: {decision} · {'Practice' if review_is_synthetic else 'Historical xBD'} label: {ground_truth}")
+                if str(previous.iloc[0]["note"]).strip():
+                    st.write(f"**Your note:** {previous.iloc[0]['note']}")
+                st.caption("A label is useful for checking this exercise. It is not a safety verdict.")
+                if selected_id == just_reviewed and st.button("Review the next building", type="primary"):
+                    st.session_state.pop("just_reviewed_id", None)
+                    st.rerun()
+            with st.expander("See the queue behind this choice"):
+                st.dataframe(visible[["rank", "sample_id", review_score]].rename(columns={
+                    "rank": "Queue position", "sample_id": "Building ID", review_score: "Ranking score",
+                }).head(40), width="stretch", hide_index=True, height=230)
         if not prior.empty:
             joined = prior.merge(review_ranked[["sample_id", "severe"]], on="sample_id", how="inner")
             certain = joined[joined["decision"] != "Unsure"]
@@ -235,10 +278,10 @@ with review_tab:
             st.download_button("Export my review decisions", joined.to_csv(index=False), file_name="local-review-decisions.csv", mime="text/csv")
 
 with explore_tab:
-    st.subheader("Explore a human-review queue")
+    st.divider()
+    st.subheader("Look at individual building rankings")
     if not local_explorer:
-        st.info("The published results are here, but the real building images are not included. To inspect them, download xBD separately and run the setup steps in METHODS.md.")
-        st.code("triage-prepare --data-root C:\\path\\to\\xBD --out data\\processed --max-tiles-per-event 30 --seed 42\ntriage-train --manifest data\\processed\\manifest.csv --test-event santa-rosa-wildfire --out results\nstreamlit run demo.py", language="powershell")
+        st.info("Real building images are not bundled with the app. If you want to inspect them on your own computer, the dataset and setup steps are in METHODS.md.")
         st.link_button("Read the setup guide ↗", "https://github.com/TBN-01/disaster-damage-triage/blob/main/METHODS.md#run-the-full-pipeline")
     else:
         score_options = {"Simple image change": "baseline_score", "Trained model": "model_score"}
@@ -317,7 +360,8 @@ with explore_tab:
                         st.info("The original satellite tiles are not available in this local results folder.")
 
 with errors_tab:
-    st.subheader("Where the queue got it wrong")
+    st.divider()
+    st.subheader("Now look at what the queue missed")
     if review_is_synthetic:
         st.warning("These example images and errors are synthetic. Load local xBD predictions to inspect real held-out cases.")
     else:
@@ -357,6 +401,7 @@ with errors_tab:
             st.caption(f"Showing the first {count} cases in ranked order. A visual pattern should be recorded as a hypothesis, not a verified explanation.")
 
 with method_tab:
+    st.divider()
     st.subheader("How I put this together")
     st.markdown('<p class="section-intro">The goal is to put more severe cases near the front of a limited review queue—not to replace inspectors.</p>', unsafe_allow_html=True)
     steps = [

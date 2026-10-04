@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -120,7 +121,21 @@ def test_synthetic_demo_and_review_persistence(tmp_path: Path) -> None:
     assert len(make_sample_demo(tmp_path / "sample")) == 24
     database = tmp_path / "reviews.sqlite3"
     save_review(database, "synthetic-demo-v1", "DEMO-001", "Unsure")
-    save_review(database, "synthetic-demo-v1", "DEMO-001", "Severe")
+    save_review(database, "synthetic-demo-v1", "DEMO-001", "Severe", "  I saw a broken roof. ")
     assert load_reviews(database, "synthetic-demo-v1")["decision"].tolist() == ["Severe"]
+    assert load_reviews(database, "synthetic-demo-v1")["note"].tolist() == ["I saw a broken roof."]
     assert load_reviews(database, "other").empty
+
+
+def test_existing_review_database_gets_note_column(tmp_path: Path) -> None:
+    database = tmp_path / "older_reviews.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE reviews (dataset_key TEXT NOT NULL, sample_id TEXT NOT NULL, "
+            "decision TEXT NOT NULL, reviewed_at TEXT NOT NULL, PRIMARY KEY (dataset_key, sample_id))"
+        )
+        connection.execute("INSERT INTO reviews VALUES ('demo', 'one', 'Unsure', 'old-date')")
+    assert load_reviews(database, "demo")["note"].tolist() == [""]
+    save_review(database, "demo", "one", "Severe", "New note")
+    assert load_reviews(database, "demo")["note"].tolist() == ["New note"]
 
