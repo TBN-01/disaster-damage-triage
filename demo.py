@@ -133,11 +133,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-story_tab, practice_tab, data_tab = st.tabs(["The story", "Try a review", "Explore the results"])
-results_tab = method_tab = story_tab
-review_tab = errors_tab = practice_tab
-scorecard_tab = explore_tab = data_tab
-
 with st.expander("New here? Take the 2-minute tour"):
     st.markdown(
         "1. **The story:** see the question, the Santa Rosa result, and where the approach fell short.\n"
@@ -146,6 +141,11 @@ with st.expander("New here? Take the 2-minute tour"):
         "3. **Explore the results:** pick a disaster and change how many buildings a person could review. "
         "The chart shows how many severe cases each queue would have reached in that historical test."
     )
+
+story_tab, practice_tab, data_tab = st.tabs(["The story", "Try a review", "Explore the results"])
+results_tab = method_tab = story_tab
+review_tab = errors_tab = practice_tab
+scorecard_tab = explore_tab = data_tab
 
 with results_tab:
     st.subheader(f"One close look: {event_name}")
