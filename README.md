@@ -17,7 +17,7 @@ For the main test, I sampled **24,465 labeled buildings across ten disasters**.
 
 The app includes a small **synthetic practice set** so you can try it without downloading the large xBD dataset. Those made-up images are only for the interactive demo; the results below come from real xBD labels.
 
-If you are showing the project to someone, the app has a simple path: **read the story → try a review → explore the full results**. In the practice review, you can write down what you noticed before the label is revealed. That note stays on your computer.
+If you are showing the project to someone, the app has a simple path: **read the story → try a review → explore the full results**. The app has a 2-minute tour at the top. In the review, you can write down what you noticed before the label is revealed. That note stays on your computer.
 
 ## What happened
 
@@ -31,11 +31,20 @@ Three choices mattered: I measured **severe cases found within a review budget**
 
 ## Try it on your computer
 
-1. Download or clone this repo.
-2. Install Python 3.10 or newer.
-3. On Windows, double-click `run-demo.cmd`. On macOS/Linux, run `sh run-demo.sh` in the project folder.
+1. [Download the project as a ZIP](https://github.com/TBN-01/disaster-damage-triage/archive/refs/heads/main.zip) and unzip it, or clone the repo.
+2. Install Python 3.10 or newer if it is not already installed. On Windows, make sure **Add Python to PATH** is checked during installation.
+3. Open the unzipped project folder. On Windows, double-click `run-demo.cmd`. On macOS/Linux, open a terminal in that folder and run `sh run-demo.sh`.
+4. Wait for the local web address to appear, usually `http://localhost:8501`, and open it in your browser if it does not open automatically. Keep the launcher window open while using the app.
 
-The first launch needs internet to install packages. After that, the app runs locally. No account or xBD download is needed to try the synthetic review demo. Your review choices are saved on your computer, not uploaded anywhere.
+The first launch needs internet to install packages. After that, the app runs locally. No account or xBD download is needed to try the synthetic review demo. Your review choices are saved on your computer, not uploaded anywhere. To stop the app, close the launcher window or press Ctrl+C in it.
+
+### A quick path through the app
+
+1. In **The story**, read the Santa Rosa result and the limitations. You can explain the point in one sentence: *I tested whether a simple image-change ranking could help people find more severe cases when they only have time to review part of a disaster.*
+2. In **Try a review**, pick **Practice images** for a quick demo. If you have already run the xBD pipeline on this computer, you can choose **Real local images** instead. These two sets keep separate answers. Choose a queue order, compare the before/after pair, make your call, and click **Save my answer and reveal the label**. Then click **Review the next building**. The building selector shows its place in the queue; the full ID is available underneath if you need it. You can export your answers as a CSV. For another practice run, use **Start the practice review over** after exporting anything you want to keep.
+3. In **Explore the results**, pick a disaster and move the review-budget slider. The counts and chart change with your choice. Try Santa Rosa, then Mexico Earthquake to see why one good result is not enough. If you have local xBD results, scroll down to inspect real building images and mistakes from the held-out event.
+
+The review exercise reveals historical or simulated labels *after* you answer. It never decides whether a building is safe.
 
 To explore **real building images**, you need to get xBD separately and run the data pipeline. The dataset is too large to include here, and its images have a separate license. The exact commands, sampling choices, metrics, and optional experiments are in [METHODS.md](METHODS.md).
 

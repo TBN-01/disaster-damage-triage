@@ -14,7 +14,7 @@ import streamlit as st
 from PIL import Image, ImageDraw
 
 from disaster_triage.ui_data import case_filter, ranked_queue
-from disaster_triage.review_store import load_reviews, save_review
+from disaster_triage.review_store import clear_reviews, load_reviews, save_review
 from disaster_triage.sample_demo import make_sample_demo
 from disaster_triage.prepare import square_crop
 
@@ -106,9 +106,6 @@ if PREDICTIONS_FILE.exists():
 
 local_explorer = using_local_metrics and predictions is not None
 sample_predictions = make_sample_demo(ROOT / "results" / "synthetic-demo")
-review_predictions = predictions if local_explorer else sample_predictions
-review_is_synthetic = not local_explorer
-dataset_key = "synthetic-demo-v1" if review_is_synthetic else hashlib.sha256(PREDICTIONS_FILE.read_bytes()).hexdigest()[:16]
 event_name = str(metrics.get("test_event", "held-out disaster")).replace("-", " ").title()
 review_count = math.ceil(model_metrics["samples"] * 0.2)
 
@@ -140,6 +137,15 @@ story_tab, practice_tab, data_tab = st.tabs(["The story", "Try a review", "Explo
 results_tab = method_tab = story_tab
 review_tab = errors_tab = practice_tab
 scorecard_tab = explore_tab = data_tab
+
+with st.expander("New here? Take the 2-minute tour"):
+    st.markdown(
+        "1. **The story:** see the question, the Santa Rosa result, and where the approach fell short.\n"
+        "2. **Try a review:** compare two images, make a call before seeing the label, then move to the next building. "
+        "Choose practice images for a quick demo, or real local images if you have the xBD files on this computer.\n"
+        "3. **Explore the results:** pick a disaster and change how many buildings a person could review. "
+        "The chart shows how many severe cases each queue would have reached in that historical test."
+    )
 
 with results_tab:
     st.subheader(f"One close look: {event_name}")
@@ -221,6 +227,13 @@ with scorecard_tab:
             f"At a {selected_budget}% budget, that means checking {int(simple['reviewed']):,} of "
             f"{int(simple['buildings']):,} buildings from this sampled event. The labels are known now because this is a historical test."
         )
+        difference = int(simple["severe_found"] - forest["severe_found"])
+        if difference > 0:
+            st.info(f"At this budget, the simple queue reached {difference} more severe-label buildings than the trained queue.")
+        elif difference < 0:
+            st.info(f"At this budget, the trained queue reached {-difference} more severe-label buildings than the simple queue.")
+        else:
+            st.info("At this budget, both queues reached the same number of severe-label buildings.")
         plot = event_curves.pivot(index="budget_percent", columns="method", values="recall").rename(columns={
             "Simple image change": "Simple image change", "Random forest": "Trained random forest",
         })
@@ -247,6 +260,24 @@ with scorecard_tab:
 with review_tab:
     st.subheader("What would you decide?")
     st.write("Compare the two images, make your call, then see the saved label. Your answer stays on this computer.")
+    if local_explorer:
+        image_source = st.radio(
+            "Which images would you like to review?",
+            ["Real local images", "Practice images"],
+            horizontal=True,
+            help="Practice images are made up. Real local images come from your xBD files and stay on this computer.",
+        )
+    else:
+        image_source = "Practice images"
+    review_is_synthetic = image_source == "Practice images"
+    review_predictions = sample_predictions if review_is_synthetic else predictions
+    dataset_key = (
+        "synthetic-demo-v1" if review_is_synthetic
+        else hashlib.sha256(PREDICTIONS_FILE.read_bytes()).hexdigest()[:16]
+    )
+    if st.session_state.get("active_dataset_key") != dataset_key:
+        st.session_state.pop("just_reviewed_id", None)
+        st.session_state["active_dataset_key"] = dataset_key
     if review_is_synthetic:
         st.caption("Practice images are made up. Your choices do not affect the real xBD results.")
     else:
@@ -277,15 +308,19 @@ with review_tab:
             st.success("No buildings remain in this view. Choose another filter to revisit decisions.")
         else:
             review_ids = visible["sample_id"].astype(str).tolist()
+            positions = dict(zip(review_ranked["sample_id"].astype(str), review_ranked["rank"]))
             selected_id = st.selectbox(
                 "Choose a building (the next one is selected for you)", review_ids,
                 index=review_ids.index(just_reviewed) if just_reviewed in review_ids else 0,
-                key="review_id",
+                format_func=lambda case_id: f"Building #{int(positions[case_id]):,} in this queue",
+                key=f"review_id_{dataset_key}",
             )
             if selected_id != just_reviewed:
                 st.session_state.pop("just_reviewed_id", None)
             case = visible[visible["sample_id"].astype(str) == selected_id].iloc[0]
-            st.caption(f"Building {selected_id} · #{int(case['rank']):,} in this queue. The score only decides review order.")
+            st.caption(f"Building #{int(case['rank']):,} in this queue. The score only decides review order.")
+            with st.expander("Need the building ID for your notes?"):
+                st.code(selected_id)
             left, right = st.columns(2)
             before_image, after_image = preview_pair(case)
             if before_image is not None and after_image is not None:
@@ -335,6 +370,14 @@ with review_tab:
             agreements = int(((certain["decision"] == "Severe") == certain["severe"].astype(bool)).sum())
             st.caption(f"Saved locally: {len(joined)} reviews · {agreements}/{len(certain)} assessments matched the {'simulated' if review_is_synthetic else 'historical'} label (excluding Unsure).")
             st.download_button("Export my review decisions", joined.to_csv(index=False), file_name="local-review-decisions.csv", mime="text/csv")
+            if review_is_synthetic:
+                with st.expander("Start the practice review over"):
+                    st.write("This clears only your practice answers and notes on this computer. Real-image reviews are left alone. Export first if you want a copy.")
+                    confirmed = st.checkbox("I want to clear my practice answers and notes")
+                    if st.button("Clear practice answers", disabled=not confirmed):
+                        clear_reviews(REVIEW_DB, dataset_key)
+                        st.session_state.pop("just_reviewed_id", None)
+                        st.rerun()
 
 with explore_tab:
     st.divider()

@@ -49,3 +49,10 @@ def load_reviews(path: Path, dataset_key: str) -> pd.DataFrame:
             "SELECT sample_id, decision, note, reviewed_at FROM reviews WHERE dataset_key = ? ORDER BY reviewed_at",
             connection, params=(dataset_key,),
         )
+
+
+def clear_reviews(path: Path, dataset_key: str) -> int:
+    """Remove answers for one image set without touching other saved reviews."""
+    with connect(path) as connection:
+        result = connection.execute("DELETE FROM reviews WHERE dataset_key = ?", (dataset_key,))
+    return result.rowcount

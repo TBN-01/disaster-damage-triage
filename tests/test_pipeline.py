@@ -11,7 +11,7 @@ from disaster_triage.prepare import polygon_box, prepare
 from disaster_triage.train import evaluate, train
 from disaster_triage.ui_data import case_filter, ranked_queue
 from disaster_triage.cross_validate import budget_curves, cross_validate, tile_bootstrap_interval, top_review
-from disaster_triage.review_store import load_reviews, save_review
+from disaster_triage.review_store import clear_reviews, load_reviews, save_review
 from disaster_triage.sample_demo import make_sample_demo
 
 
@@ -139,6 +139,10 @@ def test_synthetic_demo_and_review_persistence(tmp_path: Path) -> None:
     assert load_reviews(database, "synthetic-demo-v1")["decision"].tolist() == ["Severe"]
     assert load_reviews(database, "synthetic-demo-v1")["note"].tolist() == ["I saw a broken roof."]
     assert load_reviews(database, "other").empty
+    save_review(database, "real-set", "REAL-001", "Not severe")
+    assert clear_reviews(database, "synthetic-demo-v1") == 1
+    assert load_reviews(database, "synthetic-demo-v1").empty
+    assert load_reviews(database, "real-set")["sample_id"].tolist() == ["REAL-001"]
 
 
 def test_existing_review_database_gets_note_column(tmp_path: Path) -> None:

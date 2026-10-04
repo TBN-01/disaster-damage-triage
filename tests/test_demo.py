@@ -26,6 +26,17 @@ def test_portable_demo_opens_without_xbd(tmp_path: Path, monkeypatch: pytest.Mon
     app.run(timeout=30)
     assert not app.exception
     assert any(button.label == "Review the next building" for button in app.button)
+    reset = next(button for button in app.button if button.label == "Clear practice answers")
+    assert reset.disabled
+    next(item for item in app.checkbox if item.label == "I want to clear my practice answers and notes").set_value(True).run(timeout=30)
+    next(button for button in app.button if button.label == "Clear practice answers").click().run(timeout=30)
+    assert not app.exception
+    assert any(button.label == "Save my answer and reveal the label" for button in app.button)
+
+    answer = next(radio for radio in app.radio if radio.label == "From these images, what do you think?")
+    answer.set_value("Looks badly damaged")
+    next(button for button in app.button if button.label == "Save my answer and reveal the label").click().run(timeout=30)
+    assert not app.exception
 
     next(button for button in app.button if button.label == "Review the next building").click().run(timeout=30)
     assert not app.exception
@@ -54,3 +65,9 @@ def test_demo_with_local_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "demo.py")).run(timeout=30)
     assert not app.exception
     assert any(item.label == "Human review budget" for item in app.slider)
+    source = next(item for item in app.radio if item.label == "Which images would you like to review?")
+    assert source.value == "Real local images"
+    source.set_value("Practice images").run(timeout=30)
+    assert not app.exception
+    assert next(item for item in app.radio if item.label == "Which images would you like to review?").value == "Practice images"
+    assert any("Practice images are made up" in item.value for item in app.caption)
